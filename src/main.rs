@@ -88,6 +88,11 @@ CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 NOTIFICATION_TYPE=$(echo "$INPUT" | jq -r '.notification_type // empty')
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // empty')
 
+# Skip if this is a meta session spawned by mccm for auto-naming
+if [ -n "$MCCM_NAMING" ]; then
+    exit 0
+fi
+
 if [ -z "$SESSION_ID" ]; then
     exit 0
 fi
@@ -144,7 +149,15 @@ if [ "$HOOK_EVENT" = "Stop" ] && [ -z "$EXISTING_NAME" ] && [ -n "$TRANSCRIPT_PA
         unset CLAUDECODE
 
         # Extract the first user prompt from the transcript
-        FIRST_PROMPT=$(jq -r 'select(.message.role == "user") | .message.content' "$TRANSCRIPT_PATH" 2>/dev/null \
+        # content may be a plain string or an array of content blocks
+        FIRST_PROMPT=$(jq -r '
+            select(.message.role == "user")
+            | .message.content
+            | if type == "array" then
+                map(select(.type == "text") | .text) | join(" ")
+              else
+                tostring
+              end' "$TRANSCRIPT_PATH" 2>/dev/null \
             | head -c 500 \
             | head -1)
 
@@ -153,7 +166,8 @@ if [ "$HOOK_EVENT" = "Stop" ] && [ -z "$EXISTING_NAME" ] && [ -n "$TRANSCRIPT_PA
         fi
 
         # Generate name via claude CLI (haiku for speed/cost)
-        NAME=$(echo "$FIRST_PROMPT" | claude -p --model haiku "Generate a concise 3-5 word title for this coding session. Output ONLY the title, nothing else. No quotes. User's request:" 2>/dev/null)
+        # Export MCCM_NAMING so hooks triggered by this call skip processing
+        NAME=$(MCCM_NAMING=1 claude -p --model haiku "Generate a concise 3-5 word title for this coding session. Output ONLY the title, nothing else. No quotes. User's request: $FIRST_PROMPT" 2>/dev/null)
 
         if [ -n "$NAME" ]; then
             # Write the name back to state.json
@@ -168,6 +182,13 @@ fi
 exit 0
 "#;
 
+// SwiftBar plugin and icons embedded in the binary
+const SWIFTBAR_PLUGIN: &str = include_str!("../swiftbar/mccm-status.5s.sh");
+const ICON_GREEN: &[u8] = include_bytes!("../swiftbar/icons/clawd-green.png");
+const ICON_YELLOW: &[u8] = include_bytes!("../swiftbar/icons/clawd-yellow.png");
+const ICON_RED: &[u8] = include_bytes!("../swiftbar/icons/clawd-red.png");
+const ICON_NONE: &[u8] = include_bytes!("../swiftbar/icons/clawd-none.png");
+
 fn hook_dir() -> PathBuf {
     dirs::home_dir()
         .expect("Home directory must exist")
@@ -177,6 +198,10 @@ fn hook_dir() -> PathBuf {
 
 fn hook_script_path() -> PathBuf {
     hook_dir().join("hook.sh")
+}
+
+fn swiftbar_dir() -> PathBuf {
+    hook_dir().join("swiftbar")
 }
 
 fn settings_path() -> PathBuf {
@@ -240,8 +265,32 @@ fn install_hooks() -> anyhow::Result<()> {
     std::fs::write(&settings_file, settings_str)?;
 
     println!("Updated {}", settings_file.display());
+
+    // 3. Write SwiftBar plugin and icons
+    let sb_dir = swiftbar_dir();
+    let sb_icons_dir = sb_dir.join("icons");
+    std::fs::create_dir_all(&sb_icons_dir)?;
+
+    let sb_plugin_path = sb_dir.join("mccm-status.5s.sh");
+    std::fs::write(&sb_plugin_path, SWIFTBAR_PLUGIN)?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&sb_plugin_path, std::fs::Permissions::from_mode(0o755))?;
+    }
+
+    std::fs::write(sb_icons_dir.join("clawd-green.png"), ICON_GREEN)?;
+    std::fs::write(sb_icons_dir.join("clawd-yellow.png"), ICON_YELLOW)?;
+    std::fs::write(sb_icons_dir.join("clawd-red.png"), ICON_RED)?;
+    std::fs::write(sb_icons_dir.join("clawd-none.png"), ICON_NONE)?;
+
+    println!("Wrote SwiftBar plugin to {}", sb_dir.display());
+
     println!("\nInstallation complete! Hooks are now active for new Claude Code sessions.");
     println!("Run `mccm` to launch the dashboard.");
+    println!("\nSwiftBar (optional):");
+    println!("  ln -s {} <your-swiftbar-plugins-dir>/mccm-status.5s.sh", sb_plugin_path.display());
 
     Ok(())
 }

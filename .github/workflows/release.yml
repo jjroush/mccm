@@ -58,3 +58,41 @@ jobs:
             mccm-*.tar.gz
             mccm-*.sha256
           generate_release_notes: true
+
+  update-homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.ref_name, '-') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Extract version and SHA256 values
+        id: meta
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha256_arm64=$(awk '{print $1}' mccm-${GITHUB_REF_NAME}-aarch64-apple-darwin.tar.gz.sha256)" >> "$GITHUB_OUTPUT"
+          echo "sha256_x86_64=$(awk '{print $1}' mccm-${GITHUB_REF_NAME}-x86_64-apple-darwin.tar.gz.sha256)" >> "$GITHUB_OUTPUT"
+
+      - name: Generate Homebrew formula
+        run: |
+          sed -e 's/VERSION/${{ steps.meta.outputs.version }}/g' \
+              -e 's/SHA256_ARM64/${{ steps.meta.outputs.sha256_arm64 }}/g' \
+              -e 's/SHA256_X86_64/${{ steps.meta.outputs.sha256_x86_64 }}/g' \
+              homebrew/mccm.rb.template > mccm.rb
+
+      - name: Update Homebrew tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          FORMULA=$(base64 -w0 mccm.rb)
+          SHA=$(gh api repos/jjroush/homebrew-tap/contents/Formula/mccm.rb --jq '.sha')
+          gh api -X PUT repos/jjroush/homebrew-tap/contents/Formula/mccm.rb \
+            -f message="Update mccm to ${{ steps.meta.outputs.version }}" \
+            -f content="$FORMULA" \
+            -f sha="$SHA"

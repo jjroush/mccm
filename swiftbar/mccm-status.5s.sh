@@ -21,9 +21,9 @@ ICON_DIR="${SCRIPT_DIR}/icons"
 if [ ! -f "$STATE" ]; then
   STATUS="none"
 else
-  needs_help=$(jq '[.[] | select(.status == "needs_help")] | length' "$STATE" 2>/dev/null)
-  active=$(jq '[.[] | select(.status == "active")] | length' "$STATE" 2>/dev/null)
-  inactive=$(jq '[.[] | select(.status == "inactive")] | length' "$STATE" 2>/dev/null)
+  needs_help=$(jq '[.sessions[] | select(.status == "needs_help")] | length' "$STATE" 2>/dev/null)
+  active=$(jq '[.sessions[] | select(.status == "active")] | length' "$STATE" 2>/dev/null)
+  inactive=$(jq '[.sessions[] | select(.status == "inactive")] | length' "$STATE" 2>/dev/null)
 
   if [ "${needs_help:-0}" -gt 0 ]; then
     STATUS="red"
@@ -71,7 +71,7 @@ echo "--Needs Help: ${needs_help:-0} | color=red"
 echo "---"
 
 # List individual sessions
-jq -r 'to_entries[] | select(.value.status != "done") | "\(.value.name // .key)|\(.value.status)|\(.value.project_path // "unknown")"' "$STATE" 2>/dev/null | \
+jq -r '.sessions | to_entries[] | select(.value.status != "done") | "\(.value.name // .key)|\(.value.status)|\(.value.project_path // "unknown")"' "$STATE" 2>/dev/null | \
 while IFS='|' read -r name status project; do
   project_name=$(basename "$project")
   case "$status" in
