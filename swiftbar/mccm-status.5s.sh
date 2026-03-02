@@ -14,8 +14,7 @@
 #   3. (Optional) Place Clawd icon PNGs in the icons/ directory next to this script
 
 STATE="$HOME/.claude/mccm/state.json"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ICON_DIR="${SCRIPT_DIR}/icons"
+ICON_DIR="$HOME/.claude/mccm/swiftbar/icons"
 
 # --- Resolve aggregate status ---
 if [ ! -f "$STATE" ]; then
