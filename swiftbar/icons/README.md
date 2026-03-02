@@ -1,28 +1,29 @@
 # Clawd Menu Bar Icons
 
-Place Clawd (Claude mascot) icon PNGs here. The SwiftBar plugin will
-automatically pick them up and display them in the macOS menu bar.
+Pixel art Clawd (Claude mascot) icons for the macOS menu bar. The
+SwiftBar plugin base64-encodes these at runtime and displays them as
+the status indicator.
 
-## Required Files
+## Included Icons
 
-| File                | Used When                          |
-|---------------------|------------------------------------|
-| `clawd-green.png`   | All sessions actively working      |
-| `clawd-yellow.png`  | At least one session is inactive   |
-| `clawd-red.png`     | At least one session needs help    |
-| `clawd-none.png`    | No live sessions                   |
+| File                | Status       | Meaning                          |
+|---------------------|--------------|----------------------------------|
+| `clawd-green.png`   | Active       | All sessions actively working    |
+| `clawd-yellow.png`  | Inactive     | At least one session is inactive |
+| `clawd-red.png`     | Needs help   | At least one session needs help  |
+| `clawd-none.png`    | No sessions  | No live sessions                 |
 
 ## Icon Specs
 
-- **Size:** 18x18 px (or 36x36 @2x for Retina)
-- **Format:** PNG with transparency
-- **Style:** Clawd mascot silhouette tinted/outlined in the status color
-  - Green Clawd: happy, actively working
-  - Yellow Clawd: sleeping or idle
-  - Red Clawd: confused or waving for help
-  - Gray/None Clawd: dimmed or outline-only
+- **Size:** 36x36 px (@2x Retina — displays as 18x18 pt)
+- **Format:** PNG with transparent background
+- **Style:** Pixel art Clawd silhouette — rectangular body, side ears,
+  square eyes, four legs. Solid fill in the status color.
 
-SwiftBar will base64-encode the PNG at runtime. Keep files small (<10 KB each).
+## Customization
+
+To replace icons, keep the same filenames and dimensions. SwiftBar
+will base64-encode the PNG at runtime — keep files small (<10 KB each).
 
 ## Fallback
 
