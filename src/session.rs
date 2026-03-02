@@ -118,9 +118,14 @@ fn merge_sessions(
             .map(|s| s.status.clone())
             .unwrap_or(Status::Done);
 
-        let name = entry
-            .custom_title
-            .clone()
+        // Priority: mccm LLM name > customTitle > summary > firstPrompt
+        let mccm_name = hook_state
+            .sessions
+            .get(&entry.session_id)
+            .and_then(|s| s.name.clone());
+
+        let name = mccm_name
+            .or_else(|| entry.custom_title.clone())
             .or_else(|| entry.summary.clone())
             .or_else(|| entry.first_prompt.as_ref().map(|p| truncate(p, 50)))
             .unwrap_or_else(|| format!("Session {}", &entry.session_id[..8.min(entry.session_id.len())]));

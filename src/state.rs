@@ -29,6 +29,7 @@ pub struct SessionStatus {
     pub last_updated: String,
     pub project_path: Option<String>,
     pub notification_type: Option<String>,
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

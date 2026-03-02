@@ -86,6 +86,7 @@ HOOK_EVENT=$(echo "$INPUT" | jq -r '.hook_event_name // empty')
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 NOTIFICATION_TYPE=$(echo "$INPUT" | jq -r '.notification_type // empty')
+TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // empty')
 
 if [ -z "$SESSION_ID" ]; then
     exit 0
@@ -117,6 +118,9 @@ if [ ! -f "$STATE_FILE" ]; then
     echo '{"sessions":{}}' > "$STATE_FILE"
 fi
 
+# Preserve existing name if present
+EXISTING_NAME=$(jq -r --arg sid "$SESSION_ID" '.sessions[$sid].name // empty' "$STATE_FILE" 2>/dev/null)
+
 # Atomic update: read, modify, write to temp, rename
 TMPFILE=$(mktemp "$STATE_DIR/state.XXXXXX.json")
 jq --arg sid "$SESSION_ID" \
@@ -124,12 +128,42 @@ jq --arg sid "$SESSION_ID" \
    --arg ts "$TIMESTAMP" \
    --arg cwd "$CWD" \
    --arg ntype "$NOTIFICATION_TYPE" \
+   --arg name "$EXISTING_NAME" \
    '.sessions[$sid] = {
        "status": $status,
        "last_updated": $ts,
        "project_path": $cwd,
-       "notification_type": (if $ntype != "" then $ntype else null end)
+       "notification_type": (if $ntype != "" then $ntype else null end),
+       "name": (if $name != "" then $name else null end)
    }' "$STATE_FILE" > "$TMPFILE" && mv "$TMPFILE" "$STATE_FILE"
+
+# Auto-name: on first Stop event, generate a name via claude CLI in background
+if [ "$HOOK_EVENT" = "Stop" ] && [ -z "$EXISTING_NAME" ] && [ -n "$TRANSCRIPT_PATH" ]; then
+    (
+        # Unset to allow nested claude CLI usage from hook context
+        unset CLAUDECODE
+
+        # Extract the first user prompt from the transcript
+        FIRST_PROMPT=$(jq -r 'select(.message.role == "user") | .message.content' "$TRANSCRIPT_PATH" 2>/dev/null \
+            | head -c 500 \
+            | head -1)
+
+        if [ -z "$FIRST_PROMPT" ]; then
+            exit 0
+        fi
+
+        # Generate name via claude CLI (haiku for speed/cost)
+        NAME=$(echo "$FIRST_PROMPT" | claude -p --model haiku "Generate a concise 3-5 word title for this coding session. Output ONLY the title, nothing else. No quotes. User's request:" 2>/dev/null)
+
+        if [ -n "$NAME" ]; then
+            # Write the name back to state.json
+            TMPFILE2=$(mktemp "$STATE_DIR/state.XXXXXX.json")
+            jq --arg sid "$SESSION_ID" \
+               --arg name "$NAME" \
+               '.sessions[$sid].name = $name' "$STATE_FILE" > "$TMPFILE2" && mv "$TMPFILE2" "$STATE_FILE"
+        fi
+    ) &
+fi
 
 exit 0
 "#;
