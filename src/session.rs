@@ -153,12 +153,15 @@ fn merge_sessions(
                 .project_path
                 .clone()
                 .unwrap_or_else(|| "unknown".to_string());
+            let name = session_status
+                .name
+                .clone()
+                .unwrap_or_else(|| {
+                    format!("Session {}", &session_id[..8.min(session_id.len())])
+                });
             result.push(DisplaySession {
                 session_id: session_id.clone(),
-                name: format!(
-                    "Session {}",
-                    &session_id[..8.min(session_id.len())]
-                ),
+                name,
                 status: session_status.status.clone(),
                 project_name: project_short_name(&project_path),
                 project_path,

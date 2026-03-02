@@ -99,7 +99,7 @@ fi
 
 # Determine status based on hook event
 case "$HOOK_EVENT" in
-    "SessionStart")
+    "SessionStart"|"PreToolUse")
         STATUS="active"
         ;;
     "Stop")
@@ -115,6 +115,16 @@ case "$HOOK_EVENT" in
         exit 0
         ;;
 esac
+
+# For PreToolUse, skip the write if already active (fires very frequently)
+if [ "$HOOK_EVENT" = "PreToolUse" ]; then
+    if [ -f "$STATE_FILE" ]; then
+        CURRENT=$(jq -r --arg sid "$SESSION_ID" '.sessions[$sid].status // empty' "$STATE_FILE" 2>/dev/null)
+        if [ "$CURRENT" = "active" ]; then
+            exit 0
+        fi
+    fi
+fi
 
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -257,7 +267,7 @@ fn install_hooks() -> anyhow::Result<()> {
 
     let hooks_obj = hooks.as_object_mut().context("hooks must be an object")?;
 
-    for event in &["SessionStart", "Stop", "Notification", "SessionEnd"] {
+    for event in &["SessionStart", "Stop", "Notification", "SessionEnd", "PreToolUse"] {
         hooks_obj.insert(event.to_string(), hook_entry.clone());
     }
 
@@ -303,7 +313,7 @@ fn uninstall_hooks() -> anyhow::Result<()> {
         let mut settings: serde_json::Value = serde_json::from_str(&content)?;
 
         if let Some(hooks) = settings.get_mut("hooks").and_then(|h| h.as_object_mut()) {
-            for event in &["SessionStart", "Stop", "Notification", "SessionEnd"] {
+            for event in &["SessionStart", "Stop", "Notification", "SessionEnd", "PreToolUse"] {
                 hooks.remove(*event);
             }
             if hooks.is_empty() {
