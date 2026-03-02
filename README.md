@@ -16,6 +16,12 @@ A lightweight TUI dashboard and macOS menu bar indicator for monitoring
 
 ## Install
 
+### Homebrew
+
+```bash
+brew install jjroush/tap/mccm
+```
+
 ### From GitHub Releases
 
 Download the latest binary from [Releases](https://github.com/jjroush/mccm/releases):
