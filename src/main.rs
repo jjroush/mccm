@@ -44,6 +44,12 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn run_tui() -> anyhow::Result<()> {
+    // Reset state file so stale sessions don't linger
+    let state_path = crate::state::state_file_path();
+    if state_path.exists() {
+        std::fs::write(&state_path, r#"{"sessions":{}}"#)?;
+    }
+
     // Set up panic hook to restore terminal
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
