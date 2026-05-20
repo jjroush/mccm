@@ -1,4 +1,5 @@
 mod app;
+mod menubar;
 mod notification;
 mod session;
 mod state;
@@ -31,6 +32,8 @@ enum Commands {
     Install,
     /// Uninstall hooks and clean up
     Uninstall,
+    /// Run the macOS menu bar daemon (foreground)
+    Menubar,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -39,6 +42,7 @@ fn main() -> anyhow::Result<()> {
     match cli.command {
         Some(Commands::Install) => install_hooks(),
         Some(Commands::Uninstall) => uninstall_hooks(),
+        Some(Commands::Menubar) => menubar::run(),
         None => run_tui(),
     }
 }
@@ -198,12 +202,28 @@ fi
 exit 0
 "#;
 
-// SwiftBar plugin and icons embedded in the binary
-const SWIFTBAR_PLUGIN: &str = include_str!("../swiftbar/mccm-status.5s.sh");
-const ICON_GREEN: &[u8] = include_bytes!("../swiftbar/icons/clawd-green.png");
-const ICON_YELLOW: &[u8] = include_bytes!("../swiftbar/icons/clawd-yellow.png");
-const ICON_RED: &[u8] = include_bytes!("../swiftbar/icons/clawd-red.png");
-const ICON_NONE: &[u8] = include_bytes!("../swiftbar/icons/clawd-none.png");
+const LAUNCH_AGENT_LABEL: &str = "io.roush.mccm.menubar";
+
+const LAUNCH_AGENT_PLIST: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{{LABEL}}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{{BIN}}</string>
+        <string>menubar</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>{{HOME}}/.claude/mccm/menubar.log</string>
+    <key>StandardErrorPath</key>
+    <string>{{HOME}}/.claude/mccm/menubar.err</string>
+</dict>
+</plist>
+"#;
 
 fn hook_dir() -> PathBuf {
     dirs::home_dir()
@@ -216,8 +236,23 @@ fn hook_script_path() -> PathBuf {
     hook_dir().join("hook.sh")
 }
 
-fn swiftbar_dir() -> PathBuf {
-    hook_dir().join("swiftbar")
+fn launch_agent_path() -> PathBuf {
+    dirs::home_dir()
+        .expect("Home directory must exist")
+        .join("Library")
+        .join("LaunchAgents")
+        .join(format!("{LAUNCH_AGENT_LABEL}.plist"))
+}
+
+fn current_uid() -> anyhow::Result<String> {
+    let out = std::process::Command::new("id")
+        .arg("-u")
+        .output()
+        .context("Running `id -u`")?;
+    if !out.status.success() {
+        anyhow::bail!("`id -u` failed");
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
 fn settings_path() -> PathBuf {
@@ -225,6 +260,72 @@ fn settings_path() -> PathBuf {
         .expect("Home directory must exist")
         .join(".claude")
         .join("settings.json")
+}
+
+fn install_launch_agent() -> anyhow::Result<()> {
+    let exe = std::env::current_exe().context("Resolving current executable path")?;
+    let home = dirs::home_dir().context("No home directory")?;
+
+    let plist_content = LAUNCH_AGENT_PLIST
+        .replace("{{LABEL}}", LAUNCH_AGENT_LABEL)
+        .replace("{{BIN}}", &exe.display().to_string())
+        .replace("{{HOME}}", &home.display().to_string());
+
+    let plist_path = launch_agent_path();
+    if let Some(parent) = plist_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&plist_path, plist_content)?;
+    println!("Wrote LaunchAgent plist to {}", plist_path.display());
+
+    // Ad-hoc code signing (best effort — silently skip if codesign isn't available)
+    let _ = std::process::Command::new("codesign")
+        .args(["--sign", "-", "--force"])
+        .arg(&exe)
+        .output();
+
+    let uid = current_uid()?;
+    let target = format!("gui/{uid}");
+    let service = format!("gui/{uid}/{LAUNCH_AGENT_LABEL}");
+
+    // Bootout any existing instance (ignore failure — first install will have nothing to remove)
+    let _ = std::process::Command::new("launchctl")
+        .args(["bootout", &service])
+        .output();
+
+    let bootstrap = std::process::Command::new("launchctl")
+        .args(["bootstrap", &target])
+        .arg(&plist_path)
+        .output()
+        .context("Running `launchctl bootstrap`")?;
+    if !bootstrap.status.success() {
+        let stderr = String::from_utf8_lossy(&bootstrap.stderr);
+        anyhow::bail!("launchctl bootstrap failed: {}", stderr.trim());
+    }
+
+    // Force immediate start (RunAtLoad usually does this, but -k makes it deterministic)
+    let _ = std::process::Command::new("launchctl")
+        .args(["kickstart", "-k", &service])
+        .output();
+
+    println!("LaunchAgent loaded — menu bar icon should appear momentarily.");
+    Ok(())
+}
+
+fn uninstall_launch_agent() -> anyhow::Result<()> {
+    if let Ok(uid) = current_uid() {
+        let service = format!("gui/{uid}/{LAUNCH_AGENT_LABEL}");
+        let _ = std::process::Command::new("launchctl")
+            .args(["bootout", &service])
+            .output();
+    }
+
+    let plist_path = launch_agent_path();
+    if plist_path.exists() {
+        std::fs::remove_file(&plist_path)?;
+        println!("Removed {}", plist_path.display());
+    }
+    Ok(())
 }
 
 fn install_hooks() -> anyhow::Result<()> {
@@ -282,36 +383,18 @@ fn install_hooks() -> anyhow::Result<()> {
 
     println!("Updated {}", settings_file.display());
 
-    // 3. Write SwiftBar plugin and icons
-    let sb_dir = swiftbar_dir();
-    let sb_icons_dir = sb_dir.join("icons");
-    std::fs::create_dir_all(&sb_icons_dir)?;
-
-    let sb_plugin_path = sb_dir.join("mccm-status.5s.sh");
-    std::fs::write(&sb_plugin_path, SWIFTBAR_PLUGIN)?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&sb_plugin_path, std::fs::Permissions::from_mode(0o755))?;
-    }
-
-    std::fs::write(sb_icons_dir.join("clawd-green.png"), ICON_GREEN)?;
-    std::fs::write(sb_icons_dir.join("clawd-yellow.png"), ICON_YELLOW)?;
-    std::fs::write(sb_icons_dir.join("clawd-red.png"), ICON_RED)?;
-    std::fs::write(sb_icons_dir.join("clawd-none.png"), ICON_NONE)?;
-
-    println!("Wrote SwiftBar plugin to {}", sb_dir.display());
+    // 3. Install the menu bar LaunchAgent
+    install_launch_agent()?;
 
     println!("\nInstallation complete! Hooks are now active for new Claude Code sessions.");
-    println!("Run `mccm` to launch the dashboard.");
-    println!("\nSwiftBar (optional):");
-    println!("  ln -s {} <your-swiftbar-plugins-dir>/mccm-status.5s.sh", sb_plugin_path.display());
-
+    println!("Run `mccm` to launch the TUI dashboard.");
     Ok(())
 }
 
 fn uninstall_hooks() -> anyhow::Result<()> {
+    // Unload and remove the LaunchAgent first (best-effort)
+    let _ = uninstall_launch_agent();
+
     // Remove hooks from settings.json
     let settings_file = settings_path();
     if settings_file.exists() {

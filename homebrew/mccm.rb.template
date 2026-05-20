@@ -16,6 +16,22 @@ class Mccm < Formula
     bin.install "mccm"
   end
 
+  def caveats
+    <<~EOS
+      To install Claude Code hooks and start the menu bar daemon
+      (LaunchAgent that runs at login), run:
+
+        mccm install
+
+      The menu bar daemon will appear in your menu bar immediately
+      and auto-start on subsequent logins.
+
+      To remove everything:
+
+        mccm uninstall
+    EOS
+  end
+
   test do
     assert_match "mccm",
       shell_output("#{bin}/mccm --help")
