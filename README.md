@@ -29,11 +29,11 @@ Download the latest binary from [Releases](https://github.com/jjroush/mccm/relea
 
 ```bash
 # Apple Silicon
-curl -L https://github.com/jjroush/mccm/releases/latest/download/mccm-v0.5.0-aarch64-apple-darwin.tar.gz | tar xz
+curl -L https://github.com/jjroush/mccm/releases/latest/download/mccm-v0.5.1-aarch64-apple-darwin.tar.gz | tar xz
 sudo mv mccm /usr/local/bin/
 
 # Intel Mac
-curl -L https://github.com/jjroush/mccm/releases/latest/download/mccm-v0.5.0-x86_64-apple-darwin.tar.gz | tar xz
+curl -L https://github.com/jjroush/mccm/releases/latest/download/mccm-v0.5.1-x86_64-apple-darwin.tar.gz | tar xz
 sudo mv mccm /usr/local/bin/
 ```
 

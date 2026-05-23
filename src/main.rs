@@ -109,13 +109,18 @@ fi
 
 # Determine status based on hook event
 case "$HOOK_EVENT" in
-    "SessionStart"|"PreToolUse")
+    "SessionStart"|"UserPromptSubmit"|"PreToolUse")
         STATUS="active"
         ;;
     "Stop")
         STATUS="inactive"
         ;;
     "Notification")
+        # idle_prompt is an informational nudge, not a user-action-required signal.
+        # Skip so the icon doesn't flip red on idle warnings.
+        if [ "$NOTIFICATION_TYPE" = "idle_prompt" ]; then
+            exit 0
+        fi
         STATUS="needs_help"
         ;;
     "SessionEnd")
@@ -293,6 +298,21 @@ fn install_launch_agent() -> anyhow::Result<()> {
         .args(["bootout", &service])
         .output();
 
+    // bootout returns before the daemon process has actually exited.
+    // If we bootstrap too quickly, launchd returns "I/O error" because the
+    // service is mid-teardown. Poll up to ~5s for the service to fully unload.
+    for _ in 0..20 {
+        let still_loaded = std::process::Command::new("launchctl")
+            .args(["print", &service])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if !still_loaded {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
+
     let bootstrap = std::process::Command::new("launchctl")
         .args(["bootstrap", &target])
         .arg(&plist_path)
@@ -374,7 +394,7 @@ fn install_hooks() -> anyhow::Result<()> {
 
     let hooks_obj = hooks.as_object_mut().context("hooks must be an object")?;
 
-    for event in &["SessionStart", "Stop", "Notification", "SessionEnd", "PreToolUse"] {
+    for event in &["SessionStart", "UserPromptSubmit", "Stop", "Notification", "SessionEnd", "PreToolUse"] {
         hooks_obj.insert(event.to_string(), hook_entry.clone());
     }
 
@@ -402,7 +422,7 @@ fn uninstall_hooks() -> anyhow::Result<()> {
         let mut settings: serde_json::Value = serde_json::from_str(&content)?;
 
         if let Some(hooks) = settings.get_mut("hooks").and_then(|h| h.as_object_mut()) {
-            for event in &["SessionStart", "Stop", "Notification", "SessionEnd", "PreToolUse"] {
+            for event in &["SessionStart", "UserPromptSubmit", "Stop", "Notification", "SessionEnd", "PreToolUse"] {
                 hooks.remove(*event);
             }
             if hooks.is_empty() {
