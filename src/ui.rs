@@ -118,6 +118,8 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         Span::raw(":nav  "),
         Span::styled("r", Style::default().fg(Color::Yellow)),
         Span::raw(":reload  "),
+        Span::styled("x", Style::default().fg(Color::Yellow)),
+        Span::raw(":clear  "),
         Span::raw("| "),
         Span::styled(
             format!("{} active", active_count),

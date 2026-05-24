@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+
+const STALE_AFTER_HOURS: i64 = 24;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
@@ -59,8 +62,43 @@ pub fn read_hook_state() -> HookState {
         return HookState::default();
     }
 
-    std::fs::read_to_string(&path)
+    let mut state: HookState = std::fs::read_to_string(&path)
         .ok()
         .and_then(|content| serde_json::from_str(&content).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+
+    // Downgrade sessions to Done if they haven't been touched in 24h. Catches
+    // orphans from Claude crashes or kills that skipped the SessionEnd hook.
+    let now = Utc::now();
+    for s in state.sessions.values_mut() {
+        if s.status == Status::Done {
+            continue;
+        }
+        if let Ok(ts) = s.last_updated.parse::<DateTime<Utc>>() {
+            if now.signed_duration_since(ts).num_hours() >= STALE_AFTER_HOURS {
+                s.status = Status::Done;
+            }
+        }
+    }
+    state
+}
+
+pub fn clear_session(session_id: &str) -> anyhow::Result<()> {
+    let path = state_file_path();
+    if !path.exists() {
+        return Ok(());
+    }
+    let content = std::fs::read_to_string(&path)?;
+    let mut state: HookState = serde_json::from_str(&content).unwrap_or_default();
+    if state.sessions.remove(session_id).is_none() {
+        return Ok(());
+    }
+
+    // Atomic write: write to sibling temp file, then rename onto the target.
+    let dir = path.parent().expect("state path must have a parent");
+    let tmp_path = dir.join(format!(".state.{}.tmp", std::process::id()));
+    let serialized = serde_json::to_string(&state)?;
+    std::fs::write(&tmp_path, serialized)?;
+    std::fs::rename(&tmp_path, &path)?;
+    Ok(())
 }

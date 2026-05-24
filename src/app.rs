@@ -92,6 +92,18 @@ impl App {
         self.table_state.select(Some(i));
     }
 
+    fn clear_selected(&mut self) {
+        let Some(idx) = self.table_state.selected() else {
+            return;
+        };
+        let Some(session) = self.sessions.get(idx) else {
+            return;
+        };
+        if state::clear_session(&session.session_id).is_ok() {
+            self.reload_data();
+        }
+    }
+
     fn previous(&mut self) {
         if self.sessions.is_empty() {
             return;
@@ -164,6 +176,7 @@ impl App {
                             KeyCode::Down | KeyCode::Char('j') => self.next(),
                             KeyCode::Up | KeyCode::Char('k') => self.previous(),
                             KeyCode::Char('r') => self.reload_data(),
+                            KeyCode::Char('x') => self.clear_selected(),
                             _ => {}
                         }
                     }
