@@ -48,6 +48,39 @@ impl Default for HookState {
     }
 }
 
+/// Aggregate health across all live sessions, in priority order:
+/// any needs-help session wins, then any inactive, then any active.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Aggregate {
+    Red,
+    Yellow,
+    Green,
+    None,
+}
+
+pub fn aggregate(state: &HookState) -> Aggregate {
+    let mut needs_help = 0;
+    let mut active = 0;
+    let mut inactive = 0;
+    for s in state.sessions.values() {
+        match s.status {
+            Status::NeedsHelp => needs_help += 1,
+            Status::Active => active += 1,
+            Status::Inactive => inactive += 1,
+            Status::Done => {}
+        }
+    }
+    if needs_help > 0 {
+        Aggregate::Red
+    } else if inactive > 0 {
+        Aggregate::Yellow
+    } else if active > 0 {
+        Aggregate::Green
+    } else {
+        Aggregate::None
+    }
+}
+
 pub fn state_file_path() -> PathBuf {
     dirs::home_dir()
         .expect("Home directory must exist")

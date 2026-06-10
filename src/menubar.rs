@@ -10,43 +10,12 @@ use tao::platform::macos::{ActivationPolicy, EventLoopExtMacOS};
 use tray_icon::menu::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIconBuilder};
 
-use crate::state::{self, read_hook_state, HookState, Status};
+use crate::state::{self, aggregate, read_hook_state, Aggregate, HookState, Status};
 
 const ICON_GREEN: &[u8] = include_bytes!("../swiftbar/icons/clawd-green.png");
 const ICON_YELLOW: &[u8] = include_bytes!("../swiftbar/icons/clawd-yellow.png");
 const ICON_RED: &[u8] = include_bytes!("../swiftbar/icons/clawd-red.png");
 const ICON_NONE: &[u8] = include_bytes!("../swiftbar/icons/clawd-none.png");
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Aggregate {
-    Red,
-    Yellow,
-    Green,
-    None,
-}
-
-fn aggregate(state: &HookState) -> Aggregate {
-    let mut needs_help = 0;
-    let mut active = 0;
-    let mut inactive = 0;
-    for s in state.sessions.values() {
-        match s.status {
-            Status::NeedsHelp => needs_help += 1,
-            Status::Active => active += 1,
-            Status::Inactive => inactive += 1,
-            Status::Done => {}
-        }
-    }
-    if needs_help > 0 {
-        Aggregate::Red
-    } else if inactive > 0 {
-        Aggregate::Yellow
-    } else if active > 0 {
-        Aggregate::Green
-    } else {
-        Aggregate::None
-    }
-}
 
 fn icon_for(agg: Aggregate) -> anyhow::Result<Icon> {
     let bytes = match agg {

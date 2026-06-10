@@ -1,0 +1,26 @@
+[package]
+name = "mccm-led-firmware"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+publish = false
+
+# Standalone package — keep cargo from looking for a parent workspace.
+[workspace]
+
+[dependencies]
+# "unstable" is required: the usb_serial_jtag driver is behind that flag.
+esp-hal = { version = "1.1.1", features = ["esp32c6", "unstable"] }
+# Embeds the app descriptor the ESP-IDF 2nd-stage bootloader expects.
+esp-bootloader-esp-idf = { version = "0.5.0", features = ["esp32c6"] }
+esp-backtrace = { version = "0.19.0", features = ["esp32c6", "panic-handler", "println"] }
+esp-println = { version = "0.17.0", features = ["esp32c6"] }
+nb = "1.1"
+critical-section = "1.2"
+
+[profile.release]
+codegen-units = 1
+debug = 2
+lto = "fat"
+opt-level = "s"

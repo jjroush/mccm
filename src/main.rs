@@ -1,4 +1,5 @@
 mod app;
+mod led;
 mod menubar;
 mod notification;
 mod session;
@@ -34,6 +35,12 @@ enum Commands {
     Uninstall,
     /// Run the macOS menu bar daemon (foreground)
     Menubar,
+    /// Mirror session state to an ESP32 over USB serial (foreground)
+    Led {
+        /// Serial device path (default: auto-detect the ESP32)
+        #[arg(long)]
+        port: Option<String>,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -43,6 +50,7 @@ fn main() -> anyhow::Result<()> {
         Some(Commands::Install) => install_hooks(),
         Some(Commands::Uninstall) => uninstall_hooks(),
         Some(Commands::Menubar) => menubar::run(),
+        Some(Commands::Led { port }) => led::run(port),
         None => run_tui(),
     }
 }

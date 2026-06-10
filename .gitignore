@@ -3,3 +3,4 @@
 *.swp
 *.swo
 .idea
+/esp32-firmware/target
