@@ -34,8 +34,9 @@ cargo run --release   # builds, flashes, and opens a serial monitor
 running.)
 
 On boot the LEDs cycle red → blue → green once as a wiring self-test,
-then follow whatever `mccm led` sends. If no byte arrives for 10 s the
-LEDs go dark rather than showing a stale status.
+then all three stay lit until `mccm led` connects. All-on means "no
+host daemon" — the board also returns there if no byte arrives for
+10 s, rather than showing a stale status.
 
 ## Recovery
 

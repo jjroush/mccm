@@ -8,9 +8,10 @@
 //!   'G' = active      -> green LED  (GPIO20)
 //!   'N' = no sessions -> all off
 //!
-//! Any other byte (including the trailing '\n') is ignored. The host
-//! heartbeats every 2 s; if nothing arrives for IDLE_TIMEOUT_MS the LEDs
-//! turn off so a dead daemon doesn't leave a stale status glowing.
+//! Any other byte (including the trailing '\n') is ignored. All three
+//! LEDs lit means "no host daemon": that's the state after boot and the
+//! state we fall back to when the heartbeat (every 2 s) goes missing for
+//! IDLE_TIMEOUT_MS, so a dead daemon can't leave a stale status showing.
 
 #![no_std]
 #![no_main]
@@ -38,12 +39,16 @@ fn main() -> ! {
     let mut blue = Output::new(peripherals.GPIO19, Level::Low, OutputConfig::default());
     let mut green = Output::new(peripherals.GPIO20, Level::Low, OutputConfig::default());
 
-    // Wiring self-test: cycle red -> blue -> green once at boot.
+    // Wiring self-test: cycle red -> blue -> green once at boot...
     for led in [&mut red, &mut blue, &mut green] {
         led.set_high();
         delay.delay_millis(300);
         led.set_low();
     }
+    // ...then hold all three on until the host daemon speaks.
+    red.set_high();
+    blue.set_high();
+    green.set_high();
 
     let mut usb_serial = UsbSerialJtag::new(peripherals.USB_DEVICE);
 
@@ -73,9 +78,9 @@ fn main() -> ! {
                 delay.delay_millis(1);
                 idle_ms = idle_ms.saturating_add(1);
                 if idle_ms == IDLE_TIMEOUT_MS {
-                    red.set_low();
-                    blue.set_low();
-                    green.set_low();
+                    red.set_high();
+                    blue.set_high();
+                    green.set_high();
                 }
             }
         }

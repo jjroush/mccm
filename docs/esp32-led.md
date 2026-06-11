@@ -155,4 +155,7 @@ mccm led --port /dev/cu.usbmodem101
 ```
 
 On boot the firmware cycles red → blue → green once as a wiring
-self-test, then waits for status bytes.
+self-test, then holds **all three LEDs on** until the daemon connects.
+All-on always means "no host daemon talking" — it's also where the
+board lands if the heartbeat goes silent for 10 seconds, so a dead
+daemon shows as obviously-disconnected instead of a stale status.
