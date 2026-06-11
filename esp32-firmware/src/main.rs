@@ -4,7 +4,7 @@
 //! labeled "ESP32C6") for single-byte status commands from `mccm led`:
 //!
 //!   'R' = needs help  -> red LED    (GPIO18)
-//!   'B' = inactive    -> blue LED   (GPIO19)
+//!   'Y' = inactive    -> yellow LED (GPIO19; legacy 'B' also accepted)
 //!   'G' = active      -> green LED  (GPIO20)
 //!   'N' = no sessions -> all off
 //!
@@ -36,18 +36,24 @@ fn main() -> ! {
     // GPIO18/19/20: adjacent on the bottom header, non-strapping, and clear
     // of the native USB pins (12/13) and the CH343 UART pins (16/17).
     let mut red = Output::new(peripherals.GPIO18, Level::Low, OutputConfig::default());
-    let mut blue = Output::new(peripherals.GPIO19, Level::Low, OutputConfig::default());
+    let mut yellow = Output::new(peripherals.GPIO19, Level::Low, OutputConfig::default());
     let mut green = Output::new(peripherals.GPIO20, Level::Low, OutputConfig::default());
 
-    // Wiring self-test: cycle red -> blue -> green once at boot...
-    for led in [&mut red, &mut blue, &mut green] {
-        led.set_high();
-        delay.delay_millis(300);
-        led.set_low();
+    // Wiring self-test: flash all three LEDs together, three times,
+    // 2 s per flash...
+    for _ in 0..3 {
+        for led in [&mut red, &mut yellow, &mut green] {
+            led.set_high();
+        }
+        delay.delay_millis(2_000);
+        for led in [&mut red, &mut yellow, &mut green] {
+            led.set_low();
+        }
+        delay.delay_millis(500);
     }
     // ...then hold all three on until the host daemon speaks.
     red.set_high();
-    blue.set_high();
+    yellow.set_high();
     green.set_high();
 
     let mut usb_serial = UsbSerialJtag::new(peripherals.USB_DEVICE);
@@ -61,14 +67,14 @@ fn main() -> ! {
             Ok(byte) => {
                 let lit = match byte {
                     b'R' => Some((true, false, false)),
-                    b'B' => Some((false, true, false)),
+                    b'Y' | b'B' => Some((false, true, false)),
                     b'G' => Some((false, false, true)),
                     b'N' => Some((false, false, false)),
                     _ => None,
                 };
-                if let Some((r, b, g)) = lit {
+                if let Some((r, y, g)) = lit {
                     set(&mut red, r);
-                    set(&mut blue, b);
+                    set(&mut yellow, y);
                     set(&mut green, g);
                     idle_ms = 0;
                 }
@@ -79,7 +85,7 @@ fn main() -> ! {
                 idle_ms = idle_ms.saturating_add(1);
                 if idle_ms == IDLE_TIMEOUT_MS {
                     red.set_high();
-                    blue.set_high();
+                    yellow.set_high();
                     green.set_high();
                 }
             }

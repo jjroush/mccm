@@ -93,7 +93,7 @@ mccm led          Mirror session state to an ESP32 over USB serial
 ## ESP32 status LEDs
 
 `mccm led` streams the aggregate session state to an ESP32 over USB
-serial, driving red/blue/green status LEDs on a breadboard. Firmware
+serial, driving red/yellow/green status LEDs on a breadboard. Firmware
 for the nanoESP32-C6 lives in [`esp32-firmware/`](esp32-firmware/);
 wiring schematic and protocol details are in
 [`docs/esp32-led.md`](docs/esp32-led.md).

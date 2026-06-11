@@ -1,9 +1,9 @@
 //! `mccm led` — daemon that mirrors aggregate session state to an ESP32
-//! over USB serial, driving three status LEDs (red / blue / green).
+//! over USB serial, driving three status LEDs (red / yellow / green).
 //!
 //! Protocol: one ASCII byte + newline per update.
 //!   'R' = needs help   (red LED)
-//!   'B' = inactive     (blue LED — the menu bar's "yellow" state)
+//!   'Y' = inactive     (yellow LED, matching the menu bar icon)
 //!   'G' = active       (green LED)
 //!   'N' = no sessions  (all LEDs off)
 //!
@@ -33,7 +33,7 @@ const KNOWN_VIDS: [u16; 3] = [0x303A, 0x1A86, 0x10C4];
 fn status_byte(agg: Aggregate) -> u8 {
     match agg {
         Aggregate::Red => b'R',
-        Aggregate::Yellow => b'B',
+        Aggregate::Yellow => b'Y',
         Aggregate::Green => b'G',
         Aggregate::None => b'N',
     }

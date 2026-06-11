@@ -33,10 +33,11 @@ cargo run --release   # builds, flashes, and opens a serial monitor
 `.cargo/config.toml`. Ctrl-C exits the monitor; the firmware keeps
 running.)
 
-On boot the LEDs cycle red → blue → green once as a wiring self-test,
-then all three stay lit until `mccm led` connects. All-on means "no
-host daemon" — the board also returns there if no byte arrives for
-10 s, rather than showing a stale status.
+On boot the firmware runs a wiring self-test — all three LEDs flash
+together three times, 2 s per flash — then all three stay lit until
+`mccm led` connects. All-on means "no host daemon" — the board also
+returns there if no byte arrives for 10 s, rather than showing a stale
+status.
 
 ## Recovery
 
