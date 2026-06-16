@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mccm × nanoESP32-C6 — Status LED Design Review</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #171a23;
+    --panel2: #1d212d;
+    --border: #2a2f3e;
+    --text: #d7dae3;
+    --muted: #8b91a3;
+    --accent: #e8a33d;
+    --red: #e5534b;
+    --blue: #539bf5;
+    --green: #57ab5a;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 0 80px;
+    background: var(--bg); color: var(--text);
+    font: 16px/1.65 -apple-system, "Segoe UI", Helvetica, sans-serif;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 0 28px; }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 48px 28px 36px; margin-bottom: 40px;
+    background: linear-gradient(180deg, #141722, var(--bg));
+  }
+  header .inner { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 30px; margin: 0 0 6px; letter-spacing: -0.5px; }
+  .subtitle { color: var(--muted); margin: 0; font-size: 17px; }
+  h2 {
+    font-size: 21px; margin: 52px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border); letter-spacing: -0.3px;
+  }
+  h3 { font-size: 16px; margin: 26px 0 8px; color: var(--accent); }
+  p { margin: 10px 0; }
+  code {
+    font-family: var(--mono); font-size: 13.5px;
+    background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 6px;
+  }
+  pre {
+    font-family: var(--mono); font-size: 13px; line-height: 1.5;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 18px; overflow-x: auto;
+  }
+  pre code { background: none; border: none; padding: 0; }
+  table {
+    border-collapse: collapse; width: 100%; margin: 14px 0;
+    font-size: 14.5px;
+  }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+  th { background: var(--panel2); font-weight: 600; }
+  td { background: var(--panel); }
+  .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 7px; vertical-align: baseline; }
+  .dot.red { background: var(--red); box-shadow: 0 0 8px var(--red); }
+  .dot.yellow { background: #d4a72c; box-shadow: 0 0 8px #d4a72c; }
+  .dot.green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .dot.off { background: #3a3f4e; }
+
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 22px 0; }
+  .flow .node {
+    background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 14px; font-size: 13.5px;
+    text-align: center; line-height: 1.35;
+  }
+  .flow .node small { display: block; color: var(--muted); font-size: 11.5px; }
+  .flow .arrow { color: var(--muted); font-size: 16px; }
+
+  .callout {
+    border-left: 3px solid var(--accent); background: var(--panel);
+    border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0;
+    font-size: 15px;
+  }
+  .callout.warn { border-left-color: var(--red); }
+  .callout .label {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+    text-transform: uppercase; color: var(--accent); display: block; margin-bottom: 4px;
+  }
+  .callout.warn .label { color: var(--red); }
+
+  .pinrow { display: flex; gap: 5px; flex-wrap: wrap; margin: 8px 0 4px; }
+  .pin {
+    font-family: var(--mono); font-size: 12px; min-width: 40px;
+    text-align: center; padding: 7px 4px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--panel2); color: var(--text);
+  }
+  .pin.pwr { background: #3a2420; border-color: #6b3a30; color: #f0a898; }
+  .pin.gnd { background: #11131a; border-color: #3a3f4e; color: #9aa0b0; }
+  .pin.strap { background: #3a3320; border-color: #6b5d2a; color: #e0c878; }
+  .pin.usb { background: #2c2440; border-color: #54448a; color: #b9a8f0; }
+  .pin.uart { background: #20303a; border-color: #34576b; color: #88c0e0; }
+  .pin.led-r { background: #3d1f1d; border-color: var(--red); color: #ff9b94; font-weight: 700; }
+  .pin.led-y { background: #3a3320; border-color: #d4a72c; color: #ecd083; font-weight: 700; }
+  .pin.led-g { background: #1c3322; border-color: var(--green); color: #9be0a0; font-weight: 700; }
+  .rowlabel { font-size: 12px; color: var(--muted); margin-top: 14px; text-transform: uppercase; letter-spacing: 1px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 14px 0 4px; font-size: 12.5px; color: var(--muted); }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .legend .pin { min-width: 26px; padding: 2px 4px; font-size: 10px; }
+
+  figure { margin: 22px 0; }
+  figure svg {
+    width: 100%; height: auto; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 10px;
+  }
+  figcaption { font-size: 13px; color: var(--muted); margin-top: 8px; text-align: center; }
+
+  ol li, ul li { margin: 6px 0; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .sources { font-size: 13.5px; color: var(--muted); }
+  .kbd-steps li { margin: 10px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="inner">
+    <h1>mccm × nanoESP32-C6 status LEDs</h1>
+    <p class="subtitle">Design review — hardware discovery, wiring schematic, firmware &amp; daemon decisions · branch <code>esp32-led</code></p>
+  </div>
+</header>
+
+<main>
+
+<h2>What this builds</h2>
+<p>Three LEDs on a breadboard mirror the aggregate state of all your Claude Code
+sessions. mccm's hooks already write every session's status to
+<code>~/.claude/mccm/state.json</code>; a new <code>mccm led</code> daemon watches that
+file and streams a one-byte status over USB serial to an ESP32-C6, whose firmware
+switches the LEDs.</p>
+
+<div class="flow">
+  <div class="node">Claude Code hooks<small>SessionStart / Stop / Notification…</small></div>
+  <div class="arrow">→</div>
+  <div class="node"><code>state.json</code><small>~/.claude/mccm/</small></div>
+  <div class="arrow">→</div>
+  <div class="node"><code>mccm led</code><small>daemon · auto-detect + heartbeat</small></div>
+  <div class="arrow">→</div>
+  <div class="node">USB-C<small>native USB-Serial-JTAG · 115200</small></div>
+  <div class="arrow">→</div>
+  <div class="node">Rust firmware<small>esp-hal 1.1.1 · no_std</small></div>
+  <div class="arrow">→</div>
+  <div class="node">3 LEDs<small>GPIO18 / 19 / 20</small></div>
+</div>
+
+<h2>Serial protocol</h2>
+<p>One ASCII byte plus newline per update. The host resends the current state every
+2&nbsp;seconds as a heartbeat, so the board converges after a replug with no handshake.
+The firmware ignores unknown bytes (including the <code>\n</code>), keeping the protocol
+forward-compatible.</p>
+
+<table>
+  <tr><th>Byte</th><th>Session state</th><th>LEDs</th></tr>
+  <tr><td><code>R</code></td><td>at least one session <b>needs help</b></td><td><span class="dot red"></span>red on</td></tr>
+  <tr><td><code>Y</code></td><td>at least one session <b>inactive</b></td><td><span class="dot yellow"></span>yellow on</td></tr>
+  <tr><td><code>G</code></td><td>all sessions <b>actively working</b></td><td><span class="dot green"></span>green on</td></tr>
+  <tr><td><code>N</code></td><td>no live sessions</td><td><span class="dot off"></span>all off</td></tr>
+</table>
+
+<div class="callout">
+  <span class="label">Design note</span>
+  The colors match the macOS menu bar icon exactly: green / yellow / red, and the
+  same priority order — needs-help beats inactive beats active. The firmware also
+  accepts <code>B</code> as a legacy alias for <code>Y</code> (the yellow LED started
+  life as a blue one), so either side of the rename still interoperates.
+</div>
+
+<h2>Board discovery — MuseLab nanoESP32-C6</h2>
+<p>The board (designed by wuxx/MuseLab, ESP32-C6-WROOM-1 module) has <b>two USB-C
+ports</b>, and the choice between them was the first real design decision:</p>
+
+<table>
+  <tr><th>Port (silkscreen)</th><th>What it is</th><th>USB VID:PID</th><th>Verdict</th></tr>
+  <tr>
+    <td><b>ESP32C6</b> — next to RST button</td>
+    <td>The chip's built-in <b>USB-Serial-JTAG</b> peripheral (GPIO12/13 internally)</td>
+    <td><code>303a:1001</code> (Espressif)</td>
+    <td>✅ <b>Used.</b> One cable flashes the firmware <em>and</em> carries status bytes.</td>
+  </tr>
+  <tr>
+    <td><b>CH343</b> — next to BOOT button</td>
+    <td>WCH CH343P USB-UART bridge → UART0 (GPIO16/17)</td>
+    <td><code>1a86:55d3</code> (WCH)</td>
+    <td>Fallback only. Its auto-reset circuit can reboot the chip when the port opens.</td>
+  </tr>
+</table>
+
+<p>Other facts that shaped the design:</p>
+<ul>
+  <li><b>Onboard WS2812 RGB LED on GPIO8</b> — could show all three colors with zero
+  wiring, but needs a timing-critical one-wire protocol driver (RMT peripheral)
+  instead of three <code>set_high()</code> calls, and GPIO8 is a strapping pin.
+  Discrete LEDs are the better first project; the WS2812 is a nice follow-up.</li>
+  <li><b>BOOT button = GPIO9, RST = chip enable.</b> If a bad flash ever kills the USB
+  port: hold BOOT, tap RST → ROM bootloader → recovery flash.</li>
+  <li>Both ports power the board; GPIO logic level is <b>3.3&nbsp;V</b>.</li>
+</ul>
+
+<h2>Pin choice — why GPIO18 / 19 / 20</h2>
+<p>The embedded nuance: on a microcontroller, almost every pin has a side job.
+"Plain GPIO with no reset-time meaning" is the thing you're shopping for. The
+elimination on the ESP32-C6:</p>
+
+<table>
+  <tr><th>Pins</th><th>Side job</th><th>Risk if used</th></tr>
+  <tr><td>GPIO4, 5, 8, 9, 15</td><td>Strapping pins, sampled at reset (8/9 select boot mode)</td><td>An LED's pull could change the boot mode — board won't start until rewired</td></tr>
+  <tr><td>GPIO12, 13</td><td>Native USB D− / D+</td><td>Reusing them kills the serial link this whole project runs on</td></tr>
+  <tr><td>GPIO16, 17</td><td>UART0 ↔ CH343 bridge</td><td>Loses the backup serial/flash path</td></tr>
+  <tr><td>GPIO24–30</td><td>SPI flash inside the module</td><td>Not even broken out</td></tr>
+  <tr><td><b>GPIO18, 19, 20</b></td><td><b>None</b></td><td>— and they're physically adjacent, two pins from a GND</td></tr>
+</table>
+
+<h3>Header map (component side up, USB ports on the left)</h3>
+
+<div class="rowlabel">Top row (J1)</div>
+<div class="pinrow">
+  <span class="pin pwr">5V</span><span class="pin usb">13</span><span class="pin usb">12</span>
+  <span class="pin">11</span><span class="pin">10</span><span class="pin strap">8</span>
+  <span class="pin">1</span><span class="pin">0</span><span class="pin">7</span><span class="pin">6</span>
+  <span class="pin strap">5</span><span class="pin strap">4</span>
+  <span class="pin">RST</span><span class="pin pwr">3V3</span><span class="pin gnd">GND</span>
+</div>
+
+<div class="rowlabel">Bottom row (J6)</div>
+<div class="pinrow">
+  <span class="pin pwr">5V</span><span class="pin gnd">GND</span><span class="pin strap">9</span>
+  <span class="pin led-r">18</span><span class="pin led-y">19</span><span class="pin led-g">20</span>
+  <span class="pin">21</span><span class="pin">22</span><span class="pin">23</span>
+  <span class="pin strap">15</span><span class="pin uart">RX 17</span><span class="pin uart">TX 16</span>
+  <span class="pin">3</span><span class="pin">2</span><span class="pin gnd">GND</span>
+</div>
+
+<div class="legend">
+  <span><span class="pin led-r">18</span><span class="pin led-y">19</span><span class="pin led-g">20</span> LED pins (this project)</span>
+  <span><span class="pin gnd">G</span> ground</span>
+  <span><span class="pin pwr">5V</span> power</span>
+  <span><span class="pin strap">8</span> strapping — avoid</span>
+  <span><span class="pin usb">12</span> native USB — avoid</span>
+  <span><span class="pin uart">RX</span> UART0 / CH343</span>
+</div>
+
+<p>The whole circuit lands on a four-pin span of the bottom row:
+<code>GND · 9 · 18 · 19 · 20</code>.</p>
+
+<h2>Schematic</h2>
+<p>Each GPIO sources current through a resistor and LED to ground (active-high).
+Long LED leg (anode) toward the resistor; short leg / flat side (cathode) toward GND.</p>
+
+<figure>
+<svg viewBox="0 0 880 330" xmlns="http://www.w3.org/2000/svg" font-family="SF Mono, Menlo, monospace" font-size="13">
+  <!-- board -->
+  <rect x="30" y="35" width="150" height="250" rx="10" fill="#1d212d" stroke="#3a3f4e" stroke-width="1.5"/>
+  <text x="105" y="62" fill="#8b91a3" text-anchor="middle" font-size="12">nanoESP32-C6</text>
+  <text x="105" y="78" fill="#5a5f70" text-anchor="middle" font-size="10">bottom header</text>
+  <rect x="38" y="92" width="26" height="16" rx="3" fill="#2c2440" stroke="#54448a"/>
+  <text x="51" y="104" fill="#b9a8f0" text-anchor="middle" font-size="9">USB</text>
+
+  <!-- pins -->
+  <g stroke="#9aa0b0" stroke-width="2">
+    <line x1="180" y1="120" x2="210" y2="120"/>
+  </g>
+  <circle cx="180" cy="120" r="3.5" fill="#9aa0b0"/>
+  <text x="172" y="124" fill="#9aa0b0" text-anchor="end">GND</text>
+
+  <circle cx="180" cy="170" r="3.5" fill="#e5534b"/>
+  <text x="172" y="174" fill="#ff9b94" text-anchor="end">GPIO18</text>
+  <circle cx="180" cy="220" r="3.5" fill="#d4a72c"/>
+  <text x="172" y="224" fill="#ecd083" text-anchor="end">GPIO19</text>
+  <circle cx="180" cy="270" r="3.5" fill="#57ab5a"/>
+  <text x="172" y="274" fill="#9be0a0" text-anchor="end">GPIO20</text>
+
+  <!-- GND wire to bus -->
+  <line x1="180" y1="120" x2="740" y2="120" stroke="#9aa0b0" stroke-width="2"/>
+
+  <!-- rows: wire, resistor, wire, LED, wire to bus -->
+  <!-- RED row y=170 -->
+  <g stroke="#e5534b" stroke-width="2" fill="none">
+    <line x1="180" y1="170" x2="290" y2="170"/>
+    <line x1="370" y1="170" x2="450" y2="170"/>
+    <line x1="487" y1="170" x2="740" y2="170"/>
+  </g>
+  <rect x="290" y="160" width="80" height="20" rx="3" fill="#1d212d" stroke="#e5534b" stroke-width="1.5"/>
+  <text x="330" y="151" fill="#d7dae3" text-anchor="middle">330 Ω</text>
+  <polygon points="450,156 450,184 482,170" fill="#3d1f1d" stroke="#e5534b" stroke-width="1.5"/>
+  <line x1="484" y1="156" x2="484" y2="184" stroke="#e5534b" stroke-width="2.5"/>
+  <text x="466" y="205" fill="#ff9b94" text-anchor="middle">RED</text>
+  <g stroke="#e5534b" stroke-width="1.2"><line x1="492" y1="152" x2="502" y2="142"/><line x1="500" y1="158" x2="510" y2="148"/></g>
+
+  <!-- YELLOW row y=220 -->
+  <g stroke="#d4a72c" stroke-width="2" fill="none">
+    <line x1="180" y1="220" x2="290" y2="220"/>
+    <line x1="370" y1="220" x2="450" y2="220"/>
+    <line x1="487" y1="220" x2="740" y2="220"/>
+  </g>
+  <rect x="290" y="210" width="80" height="20" rx="3" fill="#1d212d" stroke="#d4a72c" stroke-width="1.5"/>
+  <text x="330" y="201" fill="#d7dae3" text-anchor="middle">330 Ω</text>
+  <polygon points="450,206 450,234 482,220" fill="#3a3320" stroke="#d4a72c" stroke-width="1.5"/>
+  <line x1="484" y1="206" x2="484" y2="234" stroke="#d4a72c" stroke-width="2.5"/>
+  <text x="466" y="255" fill="#ecd083" text-anchor="middle">YELLOW</text>
+  <g stroke="#d4a72c" stroke-width="1.2"><line x1="492" y1="202" x2="502" y2="192"/><line x1="500" y1="208" x2="510" y2="198"/></g>
+
+  <!-- GREEN row y=270 -->
+  <g stroke="#57ab5a" stroke-width="2" fill="none">
+    <line x1="180" y1="270" x2="290" y2="270"/>
+    <line x1="370" y1="270" x2="450" y2="270"/>
+    <line x1="487" y1="270" x2="740" y2="270"/>
+  </g>
+  <rect x="290" y="260" width="80" height="20" rx="3" fill="#1d212d" stroke="#57ab5a" stroke-width="1.5"/>
+  <text x="330" y="251" fill="#d7dae3" text-anchor="middle">330 Ω</text>
+  <polygon points="450,256 450,284 482,270" fill="#1c3322" stroke="#57ab5a" stroke-width="1.5"/>
+  <line x1="484" y1="256" x2="484" y2="284" stroke="#57ab5a" stroke-width="2.5"/>
+  <text x="466" y="305" fill="#9be0a0" text-anchor="middle">GREEN</text>
+  <g stroke="#57ab5a" stroke-width="1.2"><line x1="492" y1="252" x2="502" y2="242"/><line x1="500" y1="258" x2="510" y2="248"/></g>
+
+  <!-- anode/cathode labels (once, on red row) -->
+  <text x="440" y="151" fill="#8b91a3" text-anchor="end" font-size="10">anode (long leg)</text>
+  <text x="540" y="151" fill="#8b91a3" font-size="10">cathode (flat side)</text>
+
+  <!-- ground bus -->
+  <line x1="740" y1="120" x2="740" y2="295" stroke="#9aa0b0" stroke-width="2.5"/>
+  <text x="755" y="125" fill="#8b91a3" font-size="11">breadboard</text>
+  <text x="755" y="140" fill="#8b91a3" font-size="11">(−) rail</text>
+  <!-- ground symbol -->
+  <g stroke="#9aa0b0" stroke-width="2.5">
+    <line x1="722" y1="300" x2="758" y2="300"/>
+    <line x1="729" y1="307" x2="751" y2="307"/>
+    <line x1="736" y1="314" x2="744" y2="314"/>
+  </g>
+</svg>
+<figcaption>Active-high drive: GPIO → 330 Ω → LED anode → cathode → shared ground rail → board GND.
+Nothing connects to 5V or 3V3 — the GPIOs themselves power the LEDs.</figcaption>
+</figure>
+
+<h3>Breadboard steps</h3>
+<ol class="kbd-steps">
+  <li>Seat the board across the breadboard's center channel (or beside it with jumpers, if headers aren't soldered yet).</li>
+  <li>Jumper the board's <b>GND</b> (bottom row, 2nd pin from the USB end) to the breadboard's blue <b>(−) rail</b>.</li>
+  <li>For each color: GPIO jumper → 330 Ω resistor → LED <b>long leg</b>; LED <b>short leg</b> → (−) rail.</li>
+  <li>Plug USB-C into the <b>ESP32C6</b> port. On boot the firmware flashes all three LEDs together three times (2 s per flash) as a wiring self-test.</li>
+</ol>
+
+<h2>Electrical reasoning</h2>
+<ul>
+  <li>GPIOs swing 0 → 3.3 V. Red and yellow LEDs drop ~2.0–2.1 V, so 330 Ω passes
+  (3.3 − 2.1) / 330 ≈ <b>3.6 mA</b> — nicely visible; kit greens are usually the
+  same low-voltage chemistry. Blue and white LEDs drop ~3.0 V+, leaving ~1 mA on
+  330 Ω — nearly invisible, which is why this project's blue became yellow.</li>
+  <li><b>The resistor is not optional.</b> An LED is a diode, not a resistor — wired
+  bare it draws whatever the pin can deliver and cooks the LED, the pin, or both.
+  Safe budget: ~10 mA per pin (the C6 can push more; no reason to).</li>
+  <li>Resistor on either leg works — it's a series loop.</li>
+</ul>
+
+<h2>Firmware decisions <span style="font-weight:400;color:var(--muted);font-size:14px">(esp32-firmware/ · esp-hal 1.1.1, no_std)</span></h2>
+<ul>
+  <li><b>RISC-V perk:</b> the C6 builds on <em>plain stable Rust</em>
+  (<code>riscv32imac-unknown-none-elf</code>) — no espup/Xtensa toolchain. The
+  <code>rust-toolchain.toml</code> auto-installs the target on first build.</li>
+  <li><b>Never writes to USB.</b> A blocking TX write on USB-Serial-JTAG stalls forever
+  if no host program is reading the port — and <code>mccm led</code> only sends. RX is
+  safe: <code>read_byte()</code> is non-blocking and just returns <code>WouldBlock</code>.</li>
+  <li><b>All three LEDs on = "no host daemon."</b> That's the state after boot and
+  where the board falls back if the 2 s heartbeat goes silent for 10 s — a dead
+  daemon reads as obviously-disconnected, never as a stale "all good".</li>
+  <li><b>Boot self-test</b> flashes all three LEDs together three times (2 s per
+  flash) so wiring is verified before any software enters the picture.</li>
+  <li><code>esp_app_desc!()</code> embeds the metadata block the ESP-IDF second-stage
+  bootloader expects; newer espflash refuses images without it.</li>
+  <li>The <code>usb_serial_jtag</code> driver sits behind esp-hal's
+  <code>unstable</code> cargo feature — required, documented in Cargo.toml.</li>
+  <li>Watchdogs: nothing to feed — <code>esp_hal::init()</code> disables them by default.</li>
+</ul>
+
+<h2>Host daemon decisions <span style="font-weight:400;color:var(--muted);font-size:14px">(src/led.rs · <code>mccm led</code>)</span></h2>
+<ul>
+  <li><b>Auto-detection by USB vendor ID</b>, in preference order:
+  <code>303a</code> Espressif native USB → <code>1a86</code> WCH CH343 →
+  <code>10c4</code> Silicon Labs CP210x → any USB serial device. Override with
+  <code>mccm led --port /dev/cu.usbmodem…</code>.</li>
+  <li>macOS nuance: prefers the callout device (<code>cu.*</code>) over dial-in
+  (<code>tty.*</code>) — <code>cu.*</code> opens without waiting for carrier-detect.</li>
+  <li><b>Send-on-change + 2 s heartbeat</b>, polling state.json every 500 ms.
+  ~1 byte/sec of traffic, and the board self-corrects after any replug.</li>
+  <li><b>Reconnect loop:</b> unplugging the board drops the daemon back to scanning every
+  2 s until it reappears — leave it running unattended.</li>
+  <li>The aggregate logic (red beats yellow beats green) moved from
+  <code>menubar.rs</code> into <code>state.rs</code>, so the menu bar icon and the LEDs
+  can never disagree.</li>
+</ul>
+
+<h2>Toolchain versions (verified)</h2>
+<table>
+  <tr><th>Component</th><th>Version</th><th>Note</th></tr>
+  <tr><td>esp-hal</td><td>1.1.1</td><td><code>esp32c6</code> + <code>unstable</code> features</td></tr>
+  <tr><td>esp-bootloader-esp-idf</td><td>0.5.0</td><td>app descriptor macro</td></tr>
+  <tr><td>esp-backtrace / esp-println</td><td>0.19.0 / 0.17.0</td><td>panic traces over the same USB port</td></tr>
+  <tr><td>espflash</td><td>3.3.0 installed</td><td>works (it's the floor); <code>cargo install espflash --locked</code> for 4.x, the version paired with esp-hal 1.x</td></tr>
+  <tr><td>Rust</td><td>stable 1.95</td><td>target <code>riscv32imac-unknown-none-elf</code></td></tr>
+</table>
+
+<h2>Run it</h2>
+<pre><code># 1. Wire the breadboard (schematic above), plug into the ESP32C6 port
+# 2. Flash:
+cd ~/Developer/cc-middle-manager/esp32-firmware
+cargo run --release          # espflash flash --monitor; Ctrl-C exits monitor
+
+# 3. Install + run the daemon:
+cd ~/Developer/cc-middle-manager
+cargo install --path .
+mccm led                     # auto-detects the board, reconnects on replug</code></pre>
+
+<h2>Sources</h2>
+<ul class="sources">
+  <li><a href="https://github.com/wuxx/nanoESP32-C6">wuxx/nanoESP32-C6</a> — board repo; pinout from <code>hardware/nanoESP32C6.pdf</code> schematic and silkscreen photos</li>
+  <li><a href="https://documentation.espressif.com/esp32-c6_datasheet_en.html">ESP32-C6 datasheet</a> — strapping pins, GPIO drive limits</li>
+  <li><a href="https://docs.rs/esp-hal/1.1.1/esp32c6/esp_hal/">esp-hal 1.1.1 docs</a> and the <a href="https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.1.1">esp-hal-v1.1.1 tag</a> — UsbSerialJtag, GPIO, init/watchdog behavior verified at tag</li>
+  <li><a href="https://github.com/esp-rs/esp-generate">esp-generate</a> — project scaffolding reference (.cargo/config.toml, linker args, espflash ≥ 3.3.0)</li>
+  <li><a href="https://github.com/esp-rs/espflash/issues/927">espflash #927</a> — app descriptor enforcement in espflash 4.x</li>
+</ul>
+
+</main>
+</body>
+</html>

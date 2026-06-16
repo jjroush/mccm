@@ -26,3 +26,4 @@ clap = { version = "4", features = ["derive"] }
 tray-icon = "0.19"
 tao = "0.30"
 image = { version = "0.25", default-features = false, features = ["png"] }
+serialport = "4"
