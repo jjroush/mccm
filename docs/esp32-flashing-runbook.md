@@ -13,7 +13,9 @@ pkill -f "mccm led"
 
 # 2. Build + flash + monitor (from the firmware dir)
 cd ~/Developer/cc-middle-manager/esp32-firmware
-cargo run --release          # Ctrl-C exits the monitor; firmware keeps running
+cargo run --release          # nano / DevKitC (default); Ctrl-C exits the monitor
+# XIAO ESP32-C6 instead:
+#   cargo run --release --no-default-features --features board-xiao
 
 # 3. Restart the daemon to get live status back
 ~/.cargo/bin/mccm led        # run in a spare terminal, or background it
@@ -33,6 +35,10 @@ stopped before every flash and restarted after.
   - nanoESP32-C6 → the connector silkscreened **`ESP32C6`** (next to RST).
   - Espressif ESP32-C6-DevKitC-1 → the connector silkscreened **`USB`**
     (the other one, `UART`, goes through a bridge chip and also works).
+  - Seeed XIAO ESP32-C6 → its single USB-C port (native; no wrong choice).
+- Pick the matching board feature when building (default is nano/DevKitC;
+  XIAO needs `--no-default-features --features board-xiao`). Wrong feature
+  = LEDs wired to the wrong pins, not a flash failure.
 - Confirm the board enumerated:
   ```bash
   ls /dev/cu.usbmodem*

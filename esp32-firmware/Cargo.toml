@@ -19,6 +19,16 @@ esp-println = { version = "0.17.0", features = ["esp32c6"] }
 nb = "1.1"
 critical-section = "1.2"
 
+[features]
+# Select the target board's LED pins at compile time (enable exactly one).
+# Default builds for the nano/DevKitC pin set (GPIO18/19/20). For the
+# Seeed XIAO ESP32-C6 (GPIO0/1/2 = pads D0/D1/D2):
+#   cargo run --release --no-default-features --features board-xiao
+default = ["board-nano"]
+board-nano = []     # MuseLab nanoESP32-C6      -> GPIO18/19/20
+board-devkitc = []  # Espressif ESP32-C6-DevKitC -> GPIO18/19/20
+board-xiao = []     # Seeed XIAO ESP32-C6        -> GPIO0/1/2
+
 [profile.release]
 codegen-units = 1
 debug = 2

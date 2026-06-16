@@ -1,8 +1,10 @@
 # mccm-led-firmware
 
-Bare-metal Rust firmware (esp-hal, `no_std`) for the MuseLab
-**nanoESP32-C6** that drives three status LEDs from `mccm led`.
-Wiring, pin choices, and the serial protocol are documented in
+Bare-metal Rust firmware (esp-hal, `no_std`) for the **ESP32-C6** that
+drives three status LEDs from `mccm led`. Builds for the MuseLab
+nanoESP32-C6 (default), the Espressif ESP32-C6-DevKitC-1, and the Seeed
+XIAO ESP32-C6 via `board-*` cargo features. Wiring, pin choices, per-board
+notes, and the serial protocol are documented in
 [`../docs/esp32-led.md`](../docs/esp32-led.md).
 
 ## One-time setup
@@ -27,6 +29,9 @@ UART bridge this firmware doesn't listen on.
 
 ```bash
 cargo run --release   # builds, flashes, and opens a serial monitor
+
+# Seeed XIAO ESP32-C6 (LEDs on GPIO0/1/2 = pads D0/D1/D2):
+cargo run --release --no-default-features --features board-xiao
 ```
 
 (`cargo run` invokes `espflash flash --monitor` via the runner in
