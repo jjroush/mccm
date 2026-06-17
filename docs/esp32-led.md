@@ -12,8 +12,10 @@ USB serial, driving three LEDs on a breadboard:
 
 The colors match the macOS menu bar icon exactly: green / yellow / red.
 
-Target board: **MuseLab nanoESP32-C6** (ESP32-C6-WROOM-1, dual USB-C).
-Firmware lives in [`esp32-firmware/`](../esp32-firmware/).
+Reference board: **MuseLab nanoESP32-C6** (ESP32-C6-WROOM-1, dual USB-C).
+Firmware lives in [`esp32-firmware/`](../esp32-firmware/) and also builds
+for the Espressif ESP32-C6-DevKitC-1 and the Seeed XIAO ESP32-C6 — see
+[Other boards](#other-boards).
 
 ## Serial protocol
 
@@ -146,11 +148,42 @@ Step by step:
    LED **short leg (cathode)** → (–) rail.
 4. Nothing connects to 5V or 3V3 — the GPIOs themselves power the LEDs.
 
+## Other boards
+
+The firmware is the same for any ESP32-C6 — only the LED GPIOs differ,
+selected at compile time with a `board-*` cargo feature. Flashing,
+toolchain, and the host daemon are identical across boards (the daemon
+auto-detects by USB vendor ID, and every C6's native USB enumerates as
+Espressif `303a:1001`).
+
+| Board | Feature (default = nano) | LED pins | Wire to pads | USB port |
+|-------|--------------------------|----------|--------------|----------|
+| MuseLab nanoESP32-C6 | `board-nano` | GPIO18/19/20 | header 18/19/20 | `ESP32C6` (native) |
+| Espressif ESP32-C6-DevKitC-1 | `board-devkitc` | GPIO18/19/20 | header 18/19/20 | `USB` (native) |
+| Seeed XIAO ESP32-C6 | `board-xiao` | GPIO0/1/2 | **D0 / D1 / D2** | single USB-C (native) |
+
+Build/flash for a non-default board by disabling the default feature:
+
+```bash
+cargo run --release --no-default-features --features board-xiao
+```
+
+**XIAO ESP32-C6 specifics:** single USB-C port wired straight to the
+native USB-Serial-JTAG — no port choice, no bridge-chip reset quirk. If
+espflash can't auto-enter the bootloader, hold **BOOT**, plug in (or tap
+**RESET**), release BOOT. LEDs go on pads **D0/D1/D2** (red/yellow/green),
+which are three adjacent pads = GPIO0/1/2; the nearest **GND** pad is on
+the opposite rail. Avoid GPIO15 (onboard user LED) and GPIO3/GPIO14
+(antenna switch) if you ever expand the wiring.
+
 ## Usage
 
 ```bash
 # 1. Flash the firmware (see esp32-firmware/README.md)
+#    Default boards (nano / DevKitC):
 cd esp32-firmware && cargo run --release
+#    Seeed XIAO ESP32-C6:
+#    cargo run --release --no-default-features --features board-xiao
 
 # 2. Run the LED daemon (auto-detects the board, reconnects on replug)
 mccm led
