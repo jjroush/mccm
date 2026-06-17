@@ -88,6 +88,11 @@ three times (2 s each), then hold all-on until the daemon connects.
 
 Press **Ctrl-C** to exit the monitor. The firmware keeps running.
 
+> **XIAO ESP32-C6:** its auto-reset into download mode is unreliable, so
+> the flash often **times out** (`espflash::timeout`) on the first try.
+> Enter the bootloader by hand — see [Entering the bootloader
+> manually](#entering-the-bootloader-manually) — then flash.
+
 ### 4. Restart the daemon
 
 ```bash
@@ -115,12 +120,41 @@ Pass `--port` explicitly when more than one serial device is present —
 otherwise espflash shows an interactive picker (and fails with "not a
 terminal" if run non-interactively).
 
+## Entering the bootloader manually
+
+Flashing needs the chip in ROM download mode. Boards with reliable
+auto-reset (nano, DevKitC) enter it on their own when espflash connects.
+The **XIAO ESP32-C6 usually does not**, so force it:
+
+1. **Press and hold BOOT.**
+2. While holding BOOT, **tap RESET** once. (No RESET handy, or it's
+   fiddly? Unplug/replug the USB-C cable while holding BOOT instead.)
+3. **Release BOOT.**
+
+A serial monitor on the port will print the ROM banner and
+`waiting for download` — that's the confirmation you're in:
+
+```
+rst:0x15 (USB_UART_HPSYS),boot:0x16 (DOWNLOAD(USB/UART0/SDIO...))
+...
+waiting for download
+```
+
+The chip stays in download mode until the next reset, so there's no rush.
+Close any monitor holding the port, then run the flash command — espflash
+connects instantly (no second BOOT dance). After flashing, espflash
+resets the chip back into the app automatically.
+
+> The `Saved PC: ... core::mem::replace` line in that banner is just the
+> reset diagnostic showing where the old firmware was — not an error.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
 | `No serial ports could be detected` | Charge-only cable, or board not enumerating. `ls /dev/cu.usbmodem*` shows nothing; USB bus has no new device. | Swap to a known-good **data** cable. Check the power LED: lit but no serial = charge-only cable; dark = no power (dead cable/port). Try another Mac port. |
 | `Device or resource busy` | Another program holds the port — almost always the `mccm led` daemon. | `pkill -f "mccm led"`, confirm with `lsof /dev/cu.usbmodem*`, reflash. If a LaunchAgent, `launchctl bootout` it. |
+| `espflash::timeout` / "Timeout while running command" | Port exists but the chip never answered the sync — it isn't in download mode. Common on the XIAO (weak auto-reset). | [Enter the bootloader manually](#entering-the-bootloader-manually) (hold BOOT, tap RESET, release), then reflash. If multiple boards are plugged in, espflash may be hitting the wrong one — leave only the target attached. |
 | `not a terminal` (dialoguer error) | espflash needs to show a port picker but isn't attached to a TTY. | Pass `--port /dev/cu.usbmodem101` explicitly. |
 | Board flashes, then "goes away" / resets | Plugged into the **CH343/UART** port, whose auto-reset circuit toggles the chip on enumeration. | Move the cable to the native **USB / ESP32C6** port. |
 | Picked `tty.*` and it hangs on open | `tty.*` (dial-in) blocks waiting for carrier-detect. | Always use the `cu.*` (callout) device on macOS. |
