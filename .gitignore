@@ -4,3 +4,7 @@
 *.swo
 .idea
 /esp32-firmware/target
+
+# 3D modeling (spec/cad)
+spec/cad/.venv/
+spec/cad/out/

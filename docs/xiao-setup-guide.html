@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build a Claude Code traffic light — XIAO ESP32-C6 setup guide</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #171a23; --panel2: #1d212d; --border: #2a2f3e;
+    --text: #d7dae3; --muted: #8b91a3; --accent: #e8a33d;
+    --red: #e5534b; --yellow: #d4a72c; --green: #57ab5a;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 0 0 90px; background: var(--bg); color: var(--text);
+    font: 16px/1.65 -apple-system, "Segoe UI", Helvetica, sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 0 28px; }
+  header { border-bottom: 1px solid var(--border); padding: 52px 28px 38px; margin-bottom: 8px;
+    background: linear-gradient(180deg, #141722, var(--bg)); }
+  header .inner { max-width: 820px; margin: 0 auto; }
+  h1 { font-size: 31px; margin: 0 0 8px; letter-spacing: -0.5px; }
+  .subtitle { color: var(--muted); margin: 0; font-size: 17px; }
+  h2 { font-size: 22px; margin: 16px 0 14px; padding: 14px 0 8px; border-bottom: 1px solid var(--border);
+    letter-spacing: -0.3px; }
+  h3 { font-size: 16.5px; margin: 26px 0 8px; color: var(--accent); }
+  p { margin: 10px 0; }
+  code { font-family: var(--mono); font-size: 13.5px; background: var(--panel2);
+    border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; }
+  pre { font-family: var(--mono); font-size: 13px; line-height: 1.55; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 8px; padding: 15px 17px; overflow-x: auto; position: relative; }
+  pre code { background: none; border: none; padding: 0; }
+  .cmt { color: var(--muted); }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); font-weight: 600; }
+  td { background: var(--panel); }
+  .step-tag { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--accent); }
+  .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 7px; vertical-align: baseline; }
+  .dot.red { background: var(--red); box-shadow: 0 0 8px var(--red); }
+  .dot.yellow { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+  .dot.green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .dot.off { background: #3a3f4e; }
+  .callout { border-left: 3px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0;
+    padding: 12px 18px; margin: 18px 0; font-size: 15px; }
+  .callout.warn { border-left-color: var(--red); }
+  .callout.ok { border-left-color: var(--green); }
+  .callout .label { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+    color: var(--accent); display: block; margin-bottom: 4px; }
+  .callout.warn .label { color: var(--red); }
+  .callout.ok .label { color: var(--green); }
+  ol li, ul li { margin: 7px 0; }
+  ol.steps { counter-reset: step; list-style: none; padding-left: 0; }
+  ol.steps > li { counter-increment: step; position: relative; padding: 4px 0 4px 44px; margin: 14px 0; }
+  ol.steps > li::before { content: counter(step); position: absolute; left: 0; top: 2px; width: 30px; height: 30px;
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 50%; color: var(--accent);
+    font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+  a { color: #539bf5; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  figure { margin: 22px 0; }
+  figure svg { width: 100%; height: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
+  figcaption { font-size: 13px; color: var(--muted); margin-top: 8px; text-align: center; }
+  .toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 24px 0; }
+  .toc ol { margin: 6px 0; padding-left: 22px; }
+  .toc a { color: var(--text); }
+  .chk { list-style: none; padding-left: 0; }
+  .chk li { padding-left: 28px; position: relative; }
+  .chk li::before { content: "☐"; position: absolute; left: 4px; color: var(--accent); font-size: 16px; }
+  kbd { font-family: var(--mono); font-size: 12px; background: #2a2f3e; border: 1px solid #3a4050; border-radius: 4px;
+    padding: 1px 6px; border-bottom-width: 2px; }
+  .pill { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--panel2); color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="inner">
+    <h1>Build a Claude Code traffic light 🚦</h1>
+    <p class="subtitle">From an unflashed Seeed XIAO ESP32-C6 to a desk status light — machine setup, soldering, flashing, and mccm. For macOS.</p>
+  </div>
+</header>
+
+<main>
+
+<p>You were sent a tiny <b>Seeed XIAO ESP32-C6</b> microcontroller and a
+<b>traffic-light LED module</b> (red / yellow / green with a single ground
+and built-in resistors). By the end of this guide they'll sit on your desk
+and change color based on what your <a href="https://claude.com/claude-code">Claude
+Code</a> sessions are doing:</p>
+
+<table>
+  <tr><th>Light</th><th>Means</th></tr>
+  <tr><td><span class="dot green"></span><b>Green</b></td><td>Claude is actively working</td></tr>
+  <tr><td><span class="dot yellow"></span><b>Yellow</b></td><td>A session is idle / paused</td></tr>
+  <tr><td><span class="dot red"></span><b>Red</b></td><td>A session needs your input</td></tr>
+  <tr><td><span class="dot off"></span>Off</td><td>No live sessions</td></tr>
+</table>
+
+<p>It plugs into your Mac over USB-C — that single cable both powers the board
+and carries the status. No batteries, no Wi-Fi, no breadboard.</p>
+
+<div class="toc">
+  <b>What we'll do</b>
+  <ol>
+    <li><a href="#need">Gather what you need</a></li>
+    <li><a href="#machine">Set up your Mac</a> — install the tools</li>
+    <li><a href="#solder">Solder the header pins</a></li>
+    <li><a href="#flash">Flash the firmware</a></li>
+    <li><a href="#wire">Wire the traffic light</a></li>
+    <li><a href="#mccm">Set up mccm</a> — the part that watches Claude</li>
+    <li><a href="#verify">Verify &amp; troubleshoot</a></li>
+  </ol>
+  <p style="margin:8px 0 0;font-size:13.5px;color:var(--muted)">Budget ~45–60 minutes the first time. The soldering is the only step that needs a careful hand.</p>
+</div>
+
+<h2 id="need">1 · What you need</h2>
+
+<h3>In the package</h3>
+<ul class="chk">
+  <li>Seeed XIAO ESP32-C6 board</li>
+  <li>A strip of header pins (XIAO ships with them loose — we'll solder them on)</li>
+  <li>Traffic-light LED module (4 pins: <b>R</b>, <b>Y</b>, <b>G</b>, <b>GND</b>)</li>
+</ul>
+
+<h3>You'll also need</h3>
+<ul class="chk">
+  <li>A Mac (this guide is macOS-only)</li>
+  <li>A <b>USB-C data cable</b> — must carry data, not charge-only. If a cable has ever synced a phone or an external drive, it's a data cable.</li>
+  <li>A soldering iron + a little solder (any basic kit; ~$15 is fine)</li>
+  <li>4 jumper wires to connect the module to the board. Get the type that matches your module's pins — if the module has male pins sticking out, use <b>female-to-female</b> jumpers.</li>
+</ul>
+
+<div class="callout">
+  <span class="label">Good news</span>
+  Your module already has resistors built in and a single shared ground, so
+  there's <b>no breadboard and no separate resistors</b> to deal with — just
+  four wires from the module to the board.
+</div>
+
+<h2 id="machine">2 · Set up your Mac</h2>
+<p><span class="step-tag">Goal</span> — install the four tools we need: Apple's
+compiler tools, the Rust language (the firmware is written in Rust), the
+flasher (<code>espflash</code>), and <code>mccm</code> itself. Open the
+<b>Terminal</b> app (⌘-Space, type "Terminal") and paste these one at a time.</p>
+
+<h3>2.1 — Apple command-line tools</h3>
+<p>Provides the C compiler and <code>git</code>. If it's already installed this
+prints a harmless "already installed" message.</p>
+<pre><code>xcode-select --install</code></pre>
+
+<h3>2.2 — Homebrew (macOS package manager)</h3>
+<p>Skip if you already have <code>brew</code>. After it installs, it prints two
+<code>echo ... &gt;&gt; ~/.zprofile</code> lines + an <code>eval</code> line —
+run those so <code>brew</code> is on your path.</p>
+<pre><code>/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"</code></pre>
+
+<h3>2.3 — Rust</h3>
+<p>Installs the Rust toolchain via <code>rustup</code>. Accept the default
+option (just press <kbd>Enter</kbd>) when prompted, then load it into your
+current shell.</p>
+<pre><code>curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"</code></pre>
+
+<h3>2.4 — espflash (the flashing tool)</h3>
+<pre><code>cargo install espflash --locked</code></pre>
+<p class="cmt">This compiles a tool and takes a few minutes — that's normal.</p>
+
+<h3>2.5 — mccm (watches Claude Code)</h3>
+<pre><code>brew install jjroush/tap/mccm</code></pre>
+
+<h3>2.6 — Get the firmware source</h3>
+<p>This is the code that runs <i>on the board</i>. Clone it somewhere like your
+home folder.</p>
+<pre><code>git clone https://github.com/jjroush/mccm.git
+cd mccm/esp32-firmware</code></pre>
+
+<div class="callout ok">
+  <span class="label">Checkpoint</span>
+  Run <code>cargo --version</code>, <code>espflash --version</code>, and
+  <code>mccm --help</code>. If all three print something (not "command not
+  found"), your Mac is ready. <span class="cmt">If one fails, close and reopen
+  Terminal so it picks up the new tools, then retry.</span>
+</div>
+
+<h2 id="solder">3 · Solder the header pins</h2>
+<p><span class="step-tag">Why</span> — the XIAO ships with its header pins
+<i>loose</i>. Until they're soldered, any wire you connect only touches by
+luck and the lights will flicker or stay dark. Soldering makes the connection
+permanent and reliable. <b>This is the fiddliest step; take your time.</b></p>
+
+<h3>What you're soldering</h3>
+<p>Push the header strips into the rows of holes along both long edges of the
+XIAO (pins pointing down), and solder each pin to its silver ring. You only
+strictly need four pins for this project — <b>D0, D1, D2</b> (top three on one
+side) and <b>GND</b> — but doing all of them keeps the board steady and ready
+for future projects.</p>
+
+<ol class="steps">
+  <li>Seat the header strips in the holes. Sitting the board on a breadboard
+  (if you have one) or pressing it flat on the table holds the pins straight
+  while you solder.</li>
+  <li>Heat the pin <i>and</i> its silver ring together with the iron tip for
+  about a second.</li>
+  <li>Touch solder to the <i>joint</i> (not the iron tip). It should melt and
+  flow into a small shiny cone. Pull the solder away, then the iron.</li>
+  <li>Each joint should look like a tiny volcano — shiny and smooth. Dull,
+  blobby, or ball-shaped means reheat it briefly.</li>
+  <li>Make sure no solder bridges two neighboring pins. If it does, reheat and
+  wipe the excess.</li>
+</ol>
+
+<div class="callout warn">
+  <span class="label">First time soldering?</span>
+  It's very learnable — watch a 3-minute "how to solder header pins" video
+  first. Key rule: heat the metal, feed solder to the metal, never melt solder
+  on the iron and dab it. The board tolerates a few seconds of heat fine; just
+  don't park the iron on one spot for 10+ seconds.
+</div>
+
+<h2 id="flash">4 · Flash the firmware</h2>
+<p><span class="step-tag">Goal</span> — load the program onto the board. You're
+still in the <code>mccm/esp32-firmware</code> folder from step 2.6.</p>
+
+<ol class="steps">
+  <li>Plug the XIAO into your Mac with the USB-C <b>data</b> cable. macOS needs
+  no driver — it appears on its own.</li>
+  <li>Run the flash command:
+    <pre><code>cargo run --release --no-default-features --features board-xiao</code></pre>
+  </li>
+  <li>Watch for <code>Flashing has completed!</code>, then the program starts.
+  The lights aren't wired yet, so nothing lights up — that's expected. Press
+  <kbd>Ctrl</kbd>+<kbd>C</kbd> to leave the monitor.</li>
+</ol>
+
+<div class="callout warn">
+  <span class="label">If it says "Timeout while running command"</span>
+  The XIAO sometimes won't auto-enter its flashing mode. Put it in by hand:
+  <ol style="margin:8px 0 0">
+    <li>Press and <b>hold the BOOT button</b>.</li>
+    <li>While holding it, unplug and replug the USB-C cable (or tap RESET).</li>
+    <li>Release BOOT.</li>
+    <li>Run the same <code>cargo run …</code> command again — it'll connect immediately.</li>
+  </ol>
+</div>
+
+<h2 id="wire">5 · Wire the traffic light</h2>
+<p><span class="step-tag">Goal</span> — connect the module's four pins to the
+board. Match by <b>label</b>, not position, since modules vary. Unplug the
+board from USB while you wire, to be safe.</p>
+
+<table>
+  <tr><th>Module pin</th><th>XIAO pad</th></tr>
+  <tr><td><span class="dot red"></span><b>R</b> (red)</td><td><code>D0</code></td></tr>
+  <tr><td><span class="dot yellow"></span><b>Y</b> (yellow)</td><td><code>D1</code></td></tr>
+  <tr><td><span class="dot green"></span><b>G</b> (green)</td><td><code>D2</code></td></tr>
+  <tr><td><span class="dot off"></span><b>GND</b> (ground)</td><td><code>GND</code></td></tr>
+</table>
+
+<figure>
+<svg viewBox="0 0 760 420" xmlns="http://www.w3.org/2000/svg" font-family="SF Mono, Menlo, monospace" font-size="12">
+  <!-- ===== Traffic light module (left) ===== -->
+  <rect x="40" y="80" width="90" height="220" rx="12" fill="#1d212d" stroke="#3a3f4e" stroke-width="1.5"/>
+  <text x="85" y="70" fill="#8b91a3" text-anchor="middle">module</text>
+  <circle cx="85" cy="125" r="26" fill="#e5534b"/>
+  <circle cx="85" cy="190" r="26" fill="#d4a72c"/>
+  <circle cx="85" cy="255" r="26" fill="#57ab5a"/>
+  <!-- module pins -->
+  <text x="150" y="129" fill="#ff9b94">R</text>
+  <text x="150" y="194" fill="#ecd083">Y</text>
+  <text x="150" y="259" fill="#9be0a0">G</text>
+  <text x="138" y="300" fill="#9aa0b0">GND</text>
+  <circle cx="130" cy="125" r="3.5" fill="#e5534b"/>
+  <circle cx="130" cy="190" r="3.5" fill="#d4a72c"/>
+  <circle cx="130" cy="255" r="3.5" fill="#57ab5a"/>
+  <circle cx="130" cy="296" r="3.5" fill="#9aa0b0"/>
+
+  <!-- ===== XIAO board (right) ===== -->
+  <rect x="500" y="55" width="170" height="300" rx="14" fill="#1d212d" stroke="#3a3f4e" stroke-width="1.5"/>
+  <rect x="560" y="48" width="50" height="16" rx="4" fill="#2c2440" stroke="#54448a"/>
+  <text x="585" y="60" fill="#b9a8f0" text-anchor="middle" font-size="9">USB-C</text>
+  <text x="585" y="345" fill="#8b91a3" text-anchor="middle">XIAO ESP32-C6</text>
+
+  <!-- left column pads (D0..D6) -->
+  <g fill="#9aa0b0">
+    <circle cx="500" cy="95" r="4"/><circle cx="500" cy="128" r="4"/><circle cx="500" cy="161" r="4"/>
+    <circle cx="500" cy="194" r="4"/><circle cx="500" cy="227" r="4"/><circle cx="500" cy="260" r="4"/><circle cx="500" cy="293" r="4"/>
+  </g>
+  <!-- highlight D0/D1/D2 -->
+  <circle cx="500" cy="95" r="6" fill="none" stroke="#e5534b" stroke-width="2.5"/>
+  <circle cx="500" cy="128" r="6" fill="none" stroke="#d4a72c" stroke-width="2.5"/>
+  <circle cx="500" cy="161" r="6" fill="none" stroke="#57ab5a" stroke-width="2.5"/>
+  <g fill="#d7dae3" text-anchor="start">
+    <text x="514" y="99" fill="#ff9b94">D0</text>
+    <text x="514" y="132" fill="#ecd083">D1</text>
+    <text x="514" y="165" fill="#9be0a0">D2</text>
+    <text x="514" y="198">D3</text><text x="514" y="231">D4</text><text x="514" y="264">D5</text><text x="514" y="297">D6</text>
+  </g>
+  <!-- right column pads (D7..5V) -->
+  <g fill="#9aa0b0">
+    <circle cx="670" cy="95" r="4"/><circle cx="670" cy="128" r="4"/><circle cx="670" cy="161" r="4"/>
+    <circle cx="670" cy="194" r="4"/><circle cx="670" cy="227" r="4"/><circle cx="670" cy="260" r="4"/><circle cx="670" cy="293" r="4"/>
+  </g>
+  <circle cx="670" cy="260" r="6" fill="none" stroke="#9aa0b0" stroke-width="2.5"/>
+  <g fill="#d7dae3" text-anchor="end">
+    <text x="656" y="99">D7</text><text x="656" y="132">D8</text><text x="656" y="165">D9</text>
+    <text x="656" y="198">D10</text><text x="656" y="231">3V3</text>
+    <text x="656" y="264" fill="#c7ccd8">GND</text><text x="656" y="297">5V</text>
+  </g>
+
+  <!-- ===== wires ===== -->
+  <!-- R -> D0 -->
+  <path d="M130,125 C 300,110 350,95 500,95" fill="none" stroke="#e5534b" stroke-width="2.5"/>
+  <!-- Y -> D1 -->
+  <path d="M130,190 C 300,170 350,128 500,128" fill="none" stroke="#d4a72c" stroke-width="2.5"/>
+  <!-- G -> D2 -->
+  <path d="M130,255 C 300,230 350,161 500,161" fill="none" stroke="#57ab5a" stroke-width="2.5"/>
+  <!-- GND -> GND (route under the board to the right column) -->
+  <path d="M130,296 C 260,390 400,395 585,395 L 585,395 C 700,395 700,260 670,260" fill="none" stroke="#9aa0b0" stroke-width="2.5" stroke-dasharray="1 0"/>
+</svg>
+<figcaption>Four wires: R→D0, Y→D1, G→D2, and the module's GND to the XIAO's GND pad (right edge). No resistors or breadboard — the module has its own.</figcaption>
+</figure>
+
+<div class="callout">
+  <span class="label">Polarity</span>
+  Because the module shares one ground, the board turns each light on by
+  sending power out the D0/D1/D2 pad. That matches how the firmware is written,
+  so colors will be correct. <span class="cmt">If every light is on at once and
+  never changes, your module might be the opposite "common-positive" type — rare,
+  but if so, connect its common pin to <code>3V3</code> instead of <code>GND</code>
+  and let me know.</span>
+</div>
+
+<h2 id="mccm">6 · Set up mccm</h2>
+<p><span class="step-tag">Goal</span> — connect Claude Code to the light. Two
+parts: install the hooks that let mccm see your sessions, and run the daemon
+that pushes status to the board.</p>
+
+<h3>6.1 — Install the Claude Code hooks</h3>
+<pre><code>mccm install</code></pre>
+<p>This wires mccm into Claude Code and adds a little status icon to your menu
+bar. (It only affects Claude Code's settings; nothing invasive.)</p>
+
+<h3>6.2 — Run the light daemon</h3>
+<p>Plug the board back into USB, then run:</p>
+<pre><code>mccm led</code></pre>
+<p>It finds the board automatically and prints <code>Connected to
+/dev/cu.usbmodem…</code> followed by a status like <code>state -&gt; G</code>.
+Leave this running in a Terminal tab — it's the bridge between Claude and the
+light. (Close it and the light goes dark after ~10 seconds.)</p>
+
+<div class="callout">
+  <span class="label">One gotcha to remember</span>
+  The light daemon and the flasher can't use the board at the same time. If you
+  ever re-flash the firmware later, <b>quit <code>mccm led</code> first</b>
+  (<kbd>Ctrl</kbd>+<kbd>C</kbd>), flash, then start it again.
+</div>
+
+<h2 id="verify">7 · Verify &amp; troubleshoot</h2>
+
+<h3>The "it works" sequence</h3>
+<ol>
+  <li>When the board powers up, all three lights flash together three times — a
+  built-in wiring self-test. <b>If you see that, your soldering and wiring are
+  good.</b></li>
+  <li>With <code>mccm led</code> running and a Claude Code session active, the
+  light turns <span class="dot green"></span><b>green</b>.</li>
+  <li>Let Claude finish and sit idle — it turns <span class="dot yellow"></span><b>yellow</b>.
+  Ask it something new — back to green.</li>
+</ol>
+
+<h3>If something's off</h3>
+<table>
+  <tr><th>Symptom</th><th>Fix</th></tr>
+  <tr><td>Flash says "No serial ports could be detected"</td><td>Charge-only cable. Swap to a data cable. If the board has any light/glow it's getting power, so the cable carries power but not data.</td></tr>
+  <tr><td>Flash says "Timeout while running command"</td><td>Hold <b>BOOT</b>, replug USB (or tap RESET), release BOOT, run the flash command again.</td></tr>
+  <tr><td>Flash says "Device or resource busy"</td><td><code>mccm led</code> is holding the port. Quit it (<kbd>Ctrl</kbd>+<kbd>C</kbd>) and flash again.</td></tr>
+  <tr><td>Only some lights work, or they flicker</td><td>A solder joint isn't solid, or a wire isn't seated. Reheat the joint for D0/D1/D2/GND until it's a shiny cone; reseat the jumpers.</td></tr>
+  <tr><td>Self-test runs but never shows live colors</td><td>Is <code>mccm led</code> running? Did <code>mccm install</code> succeed? Start a Claude Code session and watch the daemon print <code>state -&gt; …</code>.</td></tr>
+  <tr><td>Lights are on but show the wrong color</td><td>Double-check R→D0, Y→D1, G→D2. Swapped wires = swapped colors.</td></tr>
+</table>
+
+<h3>How it all fits together</h3>
+<p>For the curious — the chain of events when Claude starts working:</p>
+<pre><code>Claude Code <span class="cmt">(hooks fire on start/stop/idle)</span>
+  → mccm writes the status to a small file
+    → <span class="cmt">"mccm led" reads it and sends one letter over USB</span>
+      → the XIAO lights the matching color</code></pre>
+
+<p style="margin-top:30px;color:var(--muted);font-size:14px">Stuck on any step? Send back exactly what the Terminal printed — the error text is usually enough to pinpoint it.</p>
+
+</main>
+</body>
+</html>
